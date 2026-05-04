@@ -1,0 +1,10 @@
+# Logdaten (nicht versionieren)
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# VS Code
+.vscode/

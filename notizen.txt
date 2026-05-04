@@ -1,0 +1,22 @@
+
+TB_   	:Block
+	TM_		:Modul
+
+// --- Start
+N 260420 133515.454000 
+	TSEnginePool-6-thread-27 [LoggerDatatype.java : 226 - info] 
+	>>> entered PO426 Nacharbeit [@LogString:2703#TB_PO426_Nacharbeit#2702:]
+// --- Ende	
+N 260420 155639.544000 TSEnginePool-6-thread-323 [LoggerDatatype.java : 226 - info] 
+	<<< leaving PO426 Nacharbeit [@LogString:22464#TB_PO426_Nacharbeit#7702:]
+
+TM_ ersten Eintrag = start #xxx = Thread-Id?
+
+
+
+E 260420 160132.264000 TSEnginePool-6-thread-93 [LoggerDatatype.java : 270 - error] 
+	ECU [MSB] Failed to get value of attribute 'actualPartNumber': The value has not been initialized (set). [@EcuDataVWGetActualPartNumber:10875#AssemblyCheck_ReadData_Slave#10870:TF_GENERIC_AssemblyCheckCheckMap_Slave#10858:TM_GENERIC_AssemblyCheckCheckMap_Slave#10786:TB_PO426_VP2#1818:]
+
+W 260420 133603.662000 TSEnginePool-6-thread-59 [LoggerDatatype.java : 248 - warn] 
+	MFTORT [NA1] is no line location in enum 'testlocationToInt' - int value set to 99 (rework) 
+	- exception: java.lang.IllegalArgumentException: No enum constant complexDT.testlocationToInt.NA1 [@PorscheMFTORTToInt:3095#Porsche_evaluateBytefieldProdInfos#3091:TM_0019_HCP5_P1_Gateway_Pruefort_aus_ProdInfos_lesen#3082:TM_0019_HCP5_P1_Gateway_Pruefort_aus_ProdInfos_lesen#3009:TB_PO426_Nacharbeit#2702:]
