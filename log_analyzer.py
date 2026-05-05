@@ -560,6 +560,8 @@ class LogAnalyzerApp:
             side=tk.LEFT, padx=5)
         ttk.Button(vd_filter_frame, text="Leeren",
                    command=lambda: self.vd_filter_var.set('')).pack(side=tk.LEFT)
+        ttk.Button(vd_filter_frame, text="CSV exportieren …",
+                   command=self._export_vorgang_diag_csv).pack(side=tk.LEFT, padx=(12, 0))
         self.vd_filter_var.trace_add('write', lambda *_: self._vd_filter_changed())
 
         vd_paned = ttk.PanedWindow(vd_outer, orient=tk.VERTICAL)
@@ -1174,6 +1176,121 @@ class LogAnalyzerApp:
                 de['uds_svc'],
                 de['raw_data'],
             ), tags=(tag,) if tag else ())
+
+
+    # ── CSV-Export: Vorgang ↔ Diag ────────────────────────────────────────────
+    def _export_vorgang_diag_csv(self):
+        """Exportiert alle Vorgänge mit zugeordneten Diag-Befehlen als CSV.
+        Spalten: ECU, TB/Funktion, Start, Ende, Dauer, #DoIP, Slave-Ident.
+        Slave-Ident enthält die DIDs (0611–0615), für die ein UDS-ReadDataById-Request
+        (22 06 11 / 22 06 12 / …) in den DoIP-Einträgen des Vorgangs vorkommt.
+        """
+        import csv as _csv
+
+        # UDS ReadDataById-Sequenzen für die gesuchten DIDs (Hex-Bytes, uppercase, Leerzeichen-getrennt)
+        SLAVE_DID_PATTERNS = {
+            '0611': '22 06 11',
+            '0612': '22 06 12',
+            '0613': '22 06 13',
+            '0614': '22 06 14',
+            '0615': '22 06 15',
+        }
+
+        rows = []
+        for iid, vg_nr, vg_id, start_dt, stop_dt, cnt, dur_str in self._vd_spans:
+            if cnt == 0:
+                continue
+
+            # DoIP-Einträge dieses Vorgangs sammeln
+            vg_doip = [
+                de for de in self.doip_entries
+                if de['datetime'] and start_dt <= de['datetime'] <= stop_dt
+            ]
+
+            # Slave-Ident: UDS-Requests mit ReadDataById (22) + DID suchen
+            found_ids: set[str] = set()
+            for de in vg_doip:
+                raw = de.get('raw_data', '') or ''
+                raw_upper = raw.upper()
+                for did, pattern in SLAVE_DID_PATTERNS.items():
+                    if pattern in raw_upper:
+                        found_ids.add(did)
+
+            slave_ident = ', '.join(sorted(found_ids)) if found_ids else ''
+
+            # NRC: Negative Responses aus den Diag-Befehlen des Vorgangs extrahieren.
+            # UDS NegResponse-Format: 7F <SID> <NRC>  (leerzeichen-getrennte Hex-Bytes)
+            nrc_entries: list[str] = []
+            for de in vg_doip:
+                if de.get('uds_svc') != 'NegResponse':
+                    continue
+                raw = de.get('raw_data', '') or ''
+                tokens = raw.split()
+                # DoIP-Payload enthält die UDS-Daten ab Index 5 (siehe parse_doip_file):
+                # tokens[5] = 7F, tokens[6] = rejected SID, tokens[7] = NRC
+                # Alternativ, wenn raw_data bereits den UDS-Teil enthält (uds_str):
+                # Wir suchen nach "7F" und nehmen das drittnächste Token als NRC.
+                uds_raw = de.get('uds_str', '') or raw
+                uds_tokens = uds_raw.split()
+                # Suche "7F" in uds_tokens
+                for i, tok in enumerate(uds_tokens):
+                    if tok.upper() == '7F' and i + 2 < len(uds_tokens):
+                        sid_byte = uds_tokens[i + 1].upper()
+                        nrc_byte = uds_tokens[i + 2].upper()
+                        nrc_entries.append(f"7F {sid_byte} {nrc_byte}")
+                        break
+
+            nrc_str = ' | '.join(nrc_entries) if nrc_entries else ''
+
+            start_str = (
+                f"{start_dt.strftime('%y%m%d %H%M%S')}.{start_dt.microsecond // 1000:03d}"
+                if start_dt else ''
+            )
+            stop_str = (
+                f"{stop_dt.strftime('%y%m%d %H%M%S')}.{stop_dt.microsecond // 1000:03d}"
+                if stop_dt else ''
+            )
+
+            rows.append({
+                'ECU':         vg_nr,
+                'TB/Funktion': vg_id,
+                'Start':       start_str,
+                'Ende':        stop_str,
+                'Dauer':       dur_str,
+                '#DoIP':       cnt,
+                'Slave-Ident': slave_ident,
+                'NRC':         nrc_str,
+            })
+
+        if not rows:
+            messagebox.showinfo(
+                "Export",
+                "Keine Vorgänge mit zugeordneten Diag-Befehlen gefunden."
+            )
+            return
+
+        path = filedialog.asksaveasfilename(
+            title="CSV-Export speichern",
+            defaultextension=".csv",
+            filetypes=[("CSV-Dateien", "*.csv"), ("Alle Dateien", "*.*")],
+        )
+        if not path:
+            return
+
+        fieldnames = ['ECU', 'TB/Funktion', 'Start', 'Ende', 'Dauer', '#DoIP', 'Slave-Ident', 'NRC']
+        try:
+            with open(path, 'w', newline='', encoding='utf-8-sig') as fh:
+                writer = _csv.DictWriter(fh, fieldnames=fieldnames, delimiter=';')
+                writer.writeheader()
+                writer.writerows(rows)
+        except Exception as exc:
+            messagebox.showerror("Export-Fehler", str(exc))
+            return
+
+        messagebox.showinfo(
+            "Export erfolgreich",
+            f"{len(rows)} Vorgänge exportiert nach:\n{path}"
+        )
 
 
 # ─── Einstiegspunkt ─────────────────────────────────────────────────────────
